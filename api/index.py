@@ -74,6 +74,7 @@ def analytics(req: AnalyticsRequest):
     return _compute(req.regions, req.threshold_ms)
 
 
+@app.get("/")
 @app.get("/api")
 def read_root():
     return {"message": "eShopCo Latency Analytics API. POST here with JSON body."}
