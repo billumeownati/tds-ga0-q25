@@ -45,36 +45,35 @@ class AnalyticsRequest(BaseModel):
     threshold_ms: float
 
 
-@app.post("/api")
-def analytics(req: AnalyticsRequest):
+def _compute(regions, threshold_ms):
     result = {}
-    for region in req.regions:
-        # Filter records for this region
+    for region in regions:
         records = [r for r in TELEMETRY if r["region"] == region]
-
         if not records:
             result[region] = None
             continue
-
         latencies = [r["latency_ms"] for r in records]
         uptimes = [r["uptime_pct"] for r in records]
-
-        avg_latency = round(statistics.mean(latencies), 2)
-        # 95th percentile using linear interpolation (same as numpy default)
-        p95_latency = round(_percentile(latencies, 95), 2)
-        avg_uptime = round(statistics.mean(uptimes), 2)
-        breaches = sum(1 for l in latencies if l > req.threshold_ms)
-
         result[region] = {
-            "avg_latency": avg_latency,
-            "p95_latency": p95_latency,
-            "avg_uptime": avg_uptime,
-            "breaches": breaches,
+            "avg_latency": round(statistics.mean(latencies), 2),
+            "p95_latency": round(_percentile(latencies, 95), 2),
+            "avg_uptime": round(statistics.mean(uptimes), 2),
+            "breaches": sum(1 for l in latencies if l > threshold_ms),
         }
-
     return result
 
 
-@app.get("/")
+# Accept POST at both / and /api so the portal works with either URL
+@app.post("/")
+def analytics_root(req: AnalyticsRequest):
+    return _compute(req.regions, req.threshold_ms)
+
+
+@app.post("/api")
+def analytics(req: AnalyticsRequest):
+    return _compute(req.regions, req.threshold_ms)
+
+
+@app.get("/api")
 def read_root():
-    return {"message": "eShopCo Latency Analytics API. POST to /api"}
+    return {"message": "eShopCo Latency Analytics API. POST here with JSON body."}
