@@ -87,7 +87,7 @@ def _compute(regions, threshold_ms):
 @app.post("/api")
 @app.post("/api/latency")
 def analytics(req: AnalyticsRequest):
-    return _compute(req.regions, req.threshold_ms)
+    return {"regions": _compute(req.regions, req.threshold_ms)}
 
 
 @app.get("/")
