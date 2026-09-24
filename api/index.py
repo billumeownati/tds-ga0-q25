@@ -26,11 +26,12 @@ def _percentile(data: list, pct: float) -> float:
 app = FastAPI()
 
 # Enable CORS for POST requests from any origin
+# NOTE: allow_credentials must be False when allow_origins=["*"] (CORS spec)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -63,18 +64,16 @@ def _compute(regions, threshold_ms):
     return result
 
 
-# Accept POST at both / and /api so the portal works with either URL
+# Accept POST at /, /api, and /api/latency (matches portal placeholder)
 @app.post("/")
-def analytics_root(req: AnalyticsRequest):
-    return _compute(req.regions, req.threshold_ms)
-
-
 @app.post("/api")
-def analytics(req: AnalyticsRequest):
+@app.post("/api/latency")
+def analytics_root(req: AnalyticsRequest):
     return _compute(req.regions, req.threshold_ms)
 
 
 @app.get("/")
 @app.get("/api")
+@app.get("/api/latency")
 def read_root():
     return {"message": "eShopCo Latency Analytics API. POST here with JSON body."}
