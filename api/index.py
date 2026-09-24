@@ -34,6 +34,7 @@ CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "*",
+    "Access-Control-Expose-Headers": "Access-Control-Allow-Origin",
     "Access-Control-Max-Age": "86400",
 }
 
