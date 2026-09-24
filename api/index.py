@@ -2,8 +2,8 @@
 import json
 import statistics
 import os
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List
 
@@ -25,27 +25,43 @@ def _percentile(data: list, pct: float) -> float:
 
 app = FastAPI()
 
-# Enable CORS for POST requests from any origin
-# NOTE: allow_credentials must be False when allow_origins=["*"] (CORS spec)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["*"],
-)
+# ── CORS ─────────────────────────────────────────────────────────────────────
+# Raw middleware forces Access-Control-Allow-Origin: * on EVERY response,
+# including OPTIONS preflight. This is more reliable than CORSMiddleware on
+# Vercel's serverless Python runtime.
 
-# Load telemetry data from the JSON file (baked in at deploy time)
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "*",
+    "Access-Control-Max-Age": "86400",
+}
+
+
+@app.middleware("http")
+async def cors_middleware(request: Request, call_next):
+    # Handle browser preflight immediately — never reaches route handlers
+    if request.method == "OPTIONS":
+        return JSONResponse(content={}, status_code=200, headers=CORS_HEADERS)
+    response = await call_next(request)
+    for key, value in CORS_HEADERS.items():
+        response.headers[key] = value
+    return response
+
+
+# ── Data ──────────────────────────────────────────────────────────────────────
 DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "q-vercel-latency.json")
 with open(DATA_PATH) as f:
     TELEMETRY = json.load(f)
 
 
+# ── Schema ────────────────────────────────────────────────────────────────────
 class AnalyticsRequest(BaseModel):
     regions: List[str]
     threshold_ms: float
 
 
+# ── Logic ─────────────────────────────────────────────────────────────────────
 def _compute(regions, threshold_ms):
     result = {}
     for region in regions:
@@ -64,11 +80,12 @@ def _compute(regions, threshold_ms):
     return result
 
 
-# Accept POST at /, /api, and /api/latency (matches portal placeholder)
+# ── Routes ────────────────────────────────────────────────────────────────────
+# Accept POST at /, /api, and /api/latency to match any portal URL format
 @app.post("/")
 @app.post("/api")
 @app.post("/api/latency")
-def analytics_root(req: AnalyticsRequest):
+def analytics(req: AnalyticsRequest):
     return _compute(req.regions, req.threshold_ms)
 
 
@@ -76,4 +93,4 @@ def analytics_root(req: AnalyticsRequest):
 @app.get("/api")
 @app.get("/api/latency")
 def read_root():
-    return {"message": "eShopCo Latency Analytics API. POST here with JSON body."}
+    return {"message": "eShopCo Latency Analytics API — POST with {regions, threshold_ms}"}
